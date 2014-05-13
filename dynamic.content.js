@@ -2,59 +2,162 @@
  * jQuery Dynamic Content Plugin
  * Github: http://github.com/yali4/dynamiccontent/
  * Link: http://yalcinceylan.net/dynamiccontent
- * Copyright: May 2013
+ * Copyright: May 2014
  * Creator: Yalçın CEYLAN
  * Github: http://github.com/yali4/
  * Website: http://yalcinceylan.net
  * License: MIT <http://opensource.org/licenses/mit-license.php>
  */
-function DynamicContent(table, modal, form, options)
+function DynamicContent(options)
 {
-
-    this.data = new Array();
-
-    this.options = options;
-
-    this.table = $(table).children('tbody');
-
-    this.modal = $(modal);
-
-    this.title = this.modal.find('.modal-title');
-
-    this.form = $(form);
 
     var root = this;
 
-    this.setChildData = function(primary, data)
+    root.data = [];
+
+    root.inputs = [];
+
+    root.options = options;
+
+    /**
+     * Dizi Döndürür.
+     *
+     * @param array
+     * @param callback
+     */
+    root.forEach = function(array, callback)
+    {
+        for ( var index in array )
+        {
+            callback(index, array[index]);
+        }
+    }
+
+    /**
+     * Başlangıç
+     */
+    root.setup = function()
+    {
+        // Varsayılan Olaylar
+        root.options.events = $.extend({beforeForm:null, beforeSubmit:null}, root.options.events);
+
+        // Seçilecek Olanlar
+        root.forEach(root.options.select, function(index, value){
+
+            root[index] = $(document.getElementById(value));
+
+        });
+
+        // Tablo Tanımlanıyor
+        root.table = root.table.children('tbody');
+
+        // Form Gönderilme Olayı
+        root.form.submit(function(event){
+
+            event.preventDefault();
+
+            root.submitAction(this);
+
+        });
+
+        // Kullanılabilir Girişler
+        root.forEach(root.options.usable, function(index, value){
+
+            root.inputs[value] = root.form.find('[name="'+value+'"]');
+
+        });
+    };
+
+    /**
+     * Form Oluşturulmadan Önce
+     */
+    root.beforeForm = function()
+    {
+        var callback = options.events.beforeForm;
+
+        if ( typeof  callback === 'function') callback.call(root, root.inputs);
+    };
+
+    /**
+     * Form Gönderilmeden Önce
+     */
+    root.beforeSubmit = function()
+    {
+        var callback = options.events.beforeSubmit;
+
+        if ( typeof callback === 'function') callback.call(root, root.inputs);
+    };
+
+    /**
+     * Veri Tanımlar.
+     *
+     * @param primary
+     * @param data
+     */
+    root.setChildData = function(primary, data)
     {
         root.data[primary] = data;
     };
 
-    this.getChildData = function(primary)
+    /**
+     * Veri Getirir.
+     *
+     * @param primary
+     * @returns {*}
+     */
+    root.getChildData = function(primary)
     {
         return root.data[primary];
     };
 
-    this.removeChildData = function(primary)
+    /**
+     * Veri Siler.
+     *
+     * @param primary
+     */
+    root.removeChildData = function(primary)
     {
         root.data[primary] = undefined;
     };
 
-    this.form.submit(function(event){
+    /**
+     * Modalı Gizler.
+     */
+    root.hideModal = function()
+    {
+        root.title.empty();
 
-        event.preventDefault();
+        root.modal.modal('hide');
+        
+        root.form.removeAttr('action');
+    };
 
-        root.submitAction();
-    });
+    /**
+     * Formu Boşaltır.
+     */
+    root.emptyForm = function()
+    {
+        root.forEach(root.inputs, function(index){
+            root.inputs[index].val(undefined);
+        })
+    };
 
-    this.hideMessages = function()
+    /**
+     * Uyarıları Gizler.
+     */
+    root.hideMessages = function()
     {
         root.form.find('.control-group').removeClass('has-error');
 
         root.form.find('.help-block').hide();
     };
 
-    this.setMessages = function(messages)
+    /**
+     * Uyarıları Tanımlar.
+     *
+     * @param messages
+     */
+    root.setMessages = function(messages)
     {
         $.each(messages, function(id, message){
 
@@ -70,46 +173,40 @@ function DynamicContent(table, modal, form, options)
         });
     };
 
-    this.showSection = function(button)
+    /**
+     * Belirtilen Alanı Gösterir.
+     *
+     * @param button
+     */
+    root.showSection = function(button)
     {
+
         var section = $(button).attr('data-controller');
 
         var sections = root.options.sections;
 
-        for ( index in sections )
-        {
-            root.modal.find('[data-section="'+sections[index]+'"]').hide();
-        }
+        root.forEach(sections, function(index, value){
+            root.modal.find('[data-section="'+value+'"]').hide();
+        });
 
         root.modal.find('[data-section="'+sections[section]+'"]').show();
+
     };
 
-    this.hideModal = function()
-    {
-        this.title.empty();
-
-        this.modal.modal('hide');
-    };
-
-    this.emptyForm = function()
-    {
-        var options = root.options;
-
-        for ( index in options.usable )
-        {
-            var column = options.usable[index];
-
-            root.form.find('[name="'+column+'"]').val(null);
-        }
-    };
-
-    this.submitAction = function()
+    /**
+     * Formu Gönderir.
+     *
+     * @return boolean
+     */
+    root.submitAction = function()
     {
         if ( root.form.attr('status') === 'true' ) return false;
 
         root.form.attr('status', 'true');
 
         root.hideMessages();
+
+        root.beforeSubmit();
 
         var submit = root.form.find('button[type="submit"]');
 
@@ -145,7 +242,12 @@ function DynamicContent(table, modal, form, options)
         }, 'JSON');
     };
 
-    this.createChild = function(item)
+    /**
+     * Yeni Çocuk Yaratır ya da Değiştirir.
+     *
+     * @param item
+     */
+    root.createChild = function(item)
     {
         var options = root.options;
 
@@ -155,20 +257,19 @@ function DynamicContent(table, modal, form, options)
 
         var create = $('<tr/>', {id:primary});
 
-        for ( index in options.columns )
-        {
-            var column = options.columns[index];
+        root.forEach(options.columns, function(index, column){
 
             create.append($('<td/>', {html:item[column]}));
-        }
+
+        });
 
         var buttons = $('<td/>');
 
-        for ( index in options.buttons )
-        {
+        root.forEach(options.buttons, function(index, value){
+
             var action = item.action[index] || null;
 
-            var button = $.extend({className:null,childNode:null}, options.buttons[index]);
+            var button = $.extend({className:null,childNode:null}, value);
 
             var attributes = {
                 'data-action' : action,
@@ -183,18 +284,23 @@ function DynamicContent(table, modal, form, options)
                 return root.callback(this);
 
             }).appendTo(buttons);
-        }
+
+        });
 
         buttons.appendTo(create);
 
-        var container = root.table.children('tr[id="'+primary+'"]');
+        var content = root.table.children('tr[id="'+primary+'"]');
 
-        if ( container.length ) return container.replaceWith(create);
+        content.length ? content.replaceWith(create) : create.hide().appendTo(root.table).fadeIn();
 
-        create.hide().appendTo(root.table).fadeIn();
     };
 
-    this.callback = function(button)
+    /**
+     * Geriçağrımları Yönetir.
+     *
+     * @param button
+     */
+    root.callback = function(button)
     {
         var actions = root.options.actions;
 
@@ -205,7 +311,12 @@ function DynamicContent(table, modal, form, options)
         if ( typeof actions[action] === 'function') return actions[action].call(button, root);
     };
 
-    this.refresh = function(button)
+    /**
+     * Yenileme Aksiyonu.
+     *
+     * @param button
+     */
+    root.refresh = function(button)
     {
         var button = $(button);
 
@@ -222,13 +333,18 @@ function DynamicContent(table, modal, form, options)
         }, 'JSON');
     };
 
-    this.insert = function(button)
+    /**
+     * Oluşturma Paneli.
+     *
+     * @param button
+     */
+    root.insert = function(button)
     {
         root.emptyForm();
 
-        root.hideMessages();
+        root.beforeForm();
 
-        root.showSection(button);
+        root.hideMessages();
 
         var options = root.options;
 
@@ -240,16 +356,21 @@ function DynamicContent(table, modal, form, options)
 
         root.title.html(options.captions.create);
 
-        root.modal.modal();
+        root.showSection(button);
+
+        root.modal.modal(options.modal);
     };
 
-    this.edit = function(button)
+    /**
+     * Düzenleme Paneli.
+     *
+     * @param button
+     */
+    root.edit = function(button)
     {
         root.emptyForm();
 
         root.hideMessages();
-
-        root.showSection(button);
 
         var button = $(button);
 
@@ -261,21 +382,29 @@ function DynamicContent(table, modal, form, options)
 
         var content = root.getChildData(primary);
 
-        for ( index in options.usable )
-        {
-            var column = options.usable[index];
+        root.forEach(root.inputs, function(index){
 
-            root.form.find('[name="'+column+'"]').val(content[column]);
-        }
+            root.inputs[index].val(content[index]);
+
+        });
+
+        root.beforeForm();
 
         root.form.attr('action', action);
 
         root.title.html(options.captions.edit);
 
-        root.modal.modal();
+        root.showSection(button);
+
+        root.modal.modal(options.modal);
     };
 
-    this.remove = function(button)
+    /**
+     * Silme Paneli.
+     *
+     * @param button
+     */
+    root.remove = function(button)
     {
         root.emptyForm();
 
@@ -293,10 +422,15 @@ function DynamicContent(table, modal, form, options)
 
         root.title.html(options.captions.remove);
 
-        root.modal.modal();
+        root.modal.modal(options.modal);
     };
 
-    this.buildChilds = function(childs)
+    /**
+     * Birden Fazla Çocuk Yaratma.
+     *
+     * @param childs
+     */
+    root.buildChilds = function(childs)
     {
         $.each(childs, function(key, row){
 
@@ -305,16 +439,28 @@ function DynamicContent(table, modal, form, options)
         });
     };
 
-    this.removeChild = function(primary)
+    /**
+     * Çocuk Öldürme.
+     *
+     * @param primary
+     */
+    root.removeChild = function(primary)
     {
         root.table.children('tr[id="'+primary+'"]').fadeOut(function(){
+
             $(this).remove();
+
         });
 
         root.removeChildData(primary);
     };
 
-    this.refreshChilds = function(childs)
+    /**
+     * Çocukları Yeniler.
+     *
+     * @param childs
+     */
+    root.refreshChilds = function(childs)
     {
         root.table.children('tr').each(function(){
 
@@ -325,6 +471,8 @@ function DynamicContent(table, modal, form, options)
         root.buildChilds(childs);
     };
 
-    return this;
+    root.setup();
+
+    return root;
 
 }
